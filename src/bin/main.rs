@@ -161,7 +161,7 @@ fn make_opts() -> Options {
          found reverts to the input file path",
         "[Path for the configuration file]",
     );
-    opts.optopt(
+    opts.optflagopt(
         "",
         "dump-default-config",
         "Dumps default configuration to PATH. PATH defaults to stdout, if omitted.",
@@ -223,11 +223,14 @@ fn execute(opts: &Options) -> FmtResult<Summary> {
         }
         Operation::ConfigOutputDefault { path } => {
             let toml = Config::default().all_options().to_toml()?;
-            if let Some(path) = path {
-                let mut file = File::create(path)?;
-                file.write_all(toml.as_bytes())?;
-            } else {
-                io::stdout().write_all(toml.as_bytes())?;
+            match path {
+                Some(ref path) if !path.is_empty() => {
+                    let mut file = File::create(path)?;
+                    file.write_all(toml.as_bytes())?;
+                }
+                _ => {
+                    io::stdout().write_all(toml.as_bytes())?;
+                }
             }
             Ok(Summary::default())
         }
@@ -403,19 +406,9 @@ fn determine_operation(matches: &Matches) -> FmtResult<Operation> {
     }
 
     if matches.opt_present("dump-default-config") {
-        // NOTE for some reason when configured with HasArg::Maybe + Occur::Optional opt_default
-        // doesn't recognize `--foo bar` as a long flag with an argument but as a long flag with no
-        // argument *plus* a free argument. Thus we check for that case in this branch -- this is
-        // required for backward compatibility.
-        if let Some(path) = matches.free.get(0) {
-            return Ok(Operation::ConfigOutputDefault {
-                path: Some(path.clone()),
-            });
-        } else {
-            return Ok(Operation::ConfigOutputDefault {
-                path: matches.opt_str("dump-default-config"),
-            });
-        }
+        return Ok(Operation::ConfigOutputDefault {
+            path: matches.opt_str("dump-default-config"),
+        });
     }
 
     if matches.opt_present("version") {
